@@ -1,71 +1,69 @@
 # Task 01 — POS Order & Inventory System
 
-**Repo:** (add your GitHub URL here)
-**Live deployment:** (add your Render/Railway/Fly.io URL here)
+**Repo:** https://github.com/ArkamThawfeek/techloom-intern-assessment
+**Live deployment:** https://task-01-orpin.vercel.app
 
 ## Stack
 
-- Backend: Node.js + Express, MySQL (mysql2), node-cron for the background expiry worker
-- Frontend: React 18 + Vite, lucide-react icons
-- Deployment: the backend serves the frontend's production build as static files, so one URL covers both the UI and the API
+- Backend: Node.js + Express, MySQL (mysql2), node-cron for the background job that expires old reservations
+- Frontend: React 18 + Vite
+- Deployment: the backend also serves the frontend's build folder, so one URL handles both the UI and the API (no separate frontend hosting needed)
 
-## UI overview
+## What's in the UI
 
-A dark-sidebar admin layout with four sections (Settings was removed — there was nothing to configure):
+Dark sidebar admin layout, 4 sections (I dropped Settings since there was nothing to actually put there):
 
-- **Dashboard** — live counts (products, orders, reserved orders, paid revenue) and a "Stock levels" panel showing every product's current stock (lowest first), not just a filtered low-stock shortlist
-- **Products** — search, table, and a modal form for add/edit/delete. Deleting a product that already has order history is blocked with a clear message (instead of a silent failure) — MySQL's foreign key protects that history, and the message tells the cashier to set stock to 0 to take it off sale instead.
-- **POS / New order** — product grid + cart → **Checkout** (itemized receipt with a live, enforced reservation countdown — "Pay now" disables itself the moment it hits zero; "Back to cart" genuinely cancels the reservation and hands your items back so you can add more, rather than abandoning them locked in limbo) → **Payment** (Success/Failure are always selectable; Timeout is visibly disabled until the real countdown actually reaches zero, at which point it's also triggered automatically with no click needed — you can't "simulate" a timeout while time remains, since that wouldn't reflect a real reservation window)
-- **Orders** — searchable, paginated list → order detail with a lifecycle timeline (Reserved → Paid/Failed/Expired/Cancelled)
-- Result modals surface duplicate-order detection, payment failure, payment timeout, and cancellation outcomes
+- **Dashboard** — quick counts (products, orders, reserved, revenue) and a stock levels table sorted lowest first
+- **Products** — add/edit/delete from a modal. If a product already has orders against it, delete is blocked with a message instead of just failing — you're told to set stock to 0 instead
+- **POS / New order** — pick products, checkout shows an itemized receipt with a countdown for the reservation. "Pay now" disables itself when the countdown hits 0. Going "Back to cart" actually cancels the reservation and puts the items back in your cart instead of just hiding the screen
+- **Payment step** — Success/Failure buttons always work. Timeout stays disabled until the countdown really reaches zero — didn't want a fake "simulate timeout" button since that's not how a real reservation window behaves
+- **Orders** — list with search + pagination, click into any order to see its status history
 
 ## Setup
 
 ### 1. Database
-
-Create a database and load the schema:
 
 ```bash
 mysql -u root -e "CREATE DATABASE pos_db;"
 mysql -u root pos_db < backend/migrations/schema.sql
 ```
 
-This also seeds three demo products, including a 3-unit "Limited Edition Mug" that's useful for testing the concurrency behavior.
+This seeds a few demo products, including a "Limited Edition Mug" with only 3 in stock — used it to test concurrent orders (see below).
 
 ### 2. Backend
 
 ```bash
 cd backend
-cp .env.example .env   # edit DB_HOST / DB_USER / DB_PASSWORD / DB_NAME for your setup
+cp .env.example .env   # fill in your DB_HOST / DB_USER / DB_PASSWORD / DB_NAME
 npm install
-npm start              # http://localhost:4000
+npm start              # runs on http://localhost:4000
 ```
 
-Environment variables (`.env`):
+Env vars:
 
 | Variable | Purpose |
 |---|---|
 | `PORT` | API port (default 4000) |
 | `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME` | MySQL connection |
-| `RESERVATION_MINUTES` | How long a stock reservation holds before it expires (default 5) |
-| `EXPIRY_SWEEP_SECONDS` | How often the background worker checks for expired reservations (default 30) |
-| `CORS_ORIGIN` | Allowed origin for the frontend during local dev |
+| `RESERVATION_MINUTES` | how long a reservation lasts before it expires (default 5) |
+| `EXPIRY_SWEEP_SECONDS` | how often the background job checks for expired reservations (default 30) |
+| `CORS_ORIGIN` | allowed origin for local frontend dev |
 
 ### 3. Frontend
 
 ```bash
 cd frontend
 npm install
-npm run dev             # http://localhost:5173, proxies /products and /orders to :4000
+npm run dev             # http://localhost:5173
 ```
 
-For production, `npm run build` outputs to `frontend/dist`, which the backend serves automatically — no separate frontend deployment needed.
+For production, `npm run build` builds into `frontend/dist`, and the backend serves it directly — no separate deploy needed for the frontend.
 
-## How to test each feature
+## How I tested each feature
 
-**Products (CRUD):** Products tab — add, edit, delete. Stock and price update immediately. Deleting a product with no order history removes it instantly; deleting one that's already been ordered is blocked with an explanatory message rather than failing silently.
+**Products CRUD:** Add/edit/delete from the Products tab. If a product has no orders yet, delete works right away. If it's already been ordered, you get a message instead of a silent error.
 
-**Concurrency-safe stock reservation:** From the Shop tab, add the "Limited Edition Mug" (starts at 3 units) to cart and check out from two browser tabs at once, or fire concurrent requests:
+**Stock reservation under concurrency:** Add the "Air Jordan 4 Retro Bred" (3 in stock) to cart from two browser tabs and check out at the same time, or run this:
 
 ```bash
 for i in 1 2 3 4 5; do
@@ -74,27 +72,25 @@ for i in 1 2 3 4 5; do
 done; wait
 ```
 
-Exactly as many requests succeed as there's stock for; the rest get a `409 OUT_OF_STOCK` response, and the product's stock never goes negative.
+Only 3 of these should succeed, the rest get `409 OUT_OF_STOCK`, and stock never goes negative.
 
-**Idempotency / duplicate submission:** Submit the same `idempotencyKey` twice to `POST /orders` — the second call returns the original order (with `"duplicate": true`) instead of reserving stock again; the UI surfaces this as a "Duplicate order detected" modal. Same protection applies to `POST /orders/:id/pay`.
+**Idempotency:** Send the same `idempotencyKey` twice to `POST /orders` — second call just returns the original order (`"duplicate": true`) instead of reserving stock again. Same thing applies to `POST /orders/:id/pay`. UI shows this as a "Duplicate order detected" popup.
 
-**Stock reservation expiry:** Place an order and don't pay. After `RESERVATION_MINUTES` (5 by default), the background worker releases the stock and marks the order `EXPIRED` — visible via the live countdown on the order detail page, or by checking `GET /orders/:id` after the window passes.
+**Reservation expiry:** Place an order and don't pay. After `RESERVATION_MINUTES` passes, the background job marks it `EXPIRED` and gives the stock back. You can watch the countdown on the order page, or just check `GET /orders/:id` after waiting.
 
-**Mock payment outcomes:** On the Payment screen, pick **Success** or **Failure** and click "Process payment" — both are real, immediate outcomes. **Timeout** is grayed out and unselectable until the actual 5-minute reservation clock reaches zero; once it does, the order resolves to `EXPIRED` automatically (no click required), and by that point "Process payment" has also disabled itself so a stale click can't slip through. To exercise `FAILURE` or `TIMEOUT` directly via the API (useful for fast review/testing without waiting out a real clock):
+**Payment outcomes:** Success/Failure work immediately from the Payment screen. Timeout is greyed out until the real countdown hits zero — once it does, the order auto-expires with no click needed. To test Failure/Timeout quickly without waiting on the real clock:
 
 ```bash
 curl -X POST http://localhost:4000/orders/<id>/pay -H "Content-Type: application/json" -d '{"mode":"FAILURE","idempotencyKey":"test-1"}'
 curl -X POST http://localhost:4000/orders/<id>/pay -H "Content-Type: application/json" -d '{"mode":"TIMEOUT","idempotencyKey":"test-2"}'
 ```
 
-Both release the reserved stock (`FAILED` and `EXPIRED` respectively).
+**Invalid transitions:** Try paying for an order that's already `PAID`/`FAILED`/`EXPIRED`/`CANCELLED` — you get `409 INVALID_TRANSITION`. Valid moves are `RESERVED → PAID/FAILED/EXPIRED/CANCELLED` and `PAID → CANCELLED`.
 
-**Order lifecycle / invalid transitions:** Try paying for an order that's already `PAID`, `FAILED`, `EXPIRED`, or `CANCELLED` — the API rejects it with `409 INVALID_TRANSITION`. Valid transitions: `RESERVED → PAID/FAILED/EXPIRED/CANCELLED`, `PAID → CANCELLED`.
+**Cancellation:** Works on `RESERVED` and `PAID` orders, restores stock either way and marks the order `CANCELLED`.
 
-**Cancellation:** Cancel button is available on `RESERVED` and `PAID` orders; either restores the reserved/purchased stock and marks the order `CANCELLED`.
+## A few notes on how it's built
 
-## Design notes
-
-- Stock changes use a single atomic `UPDATE products SET stock = stock - ? WHERE id = ? AND stock >= ?`. If it affects zero rows, there wasn't enough stock — no explicit row locking needed, and it composes cleanly with a wrapping transaction for multi-item orders (all-or-nothing).
-- The order status transition map lives in `src/utils/orderStateMachine.js` and is checked before every status change, so invalid transitions fail loudly instead of silently corrupting state.
-- Reservation expiry is handled two ways: a `node-cron` sweep every `EXPIRY_SWEEP_SECONDS`, plus a lazy check whenever an order is read or paid, so a request landing between sweeps still sees correct state.
+- Stock updates go through one atomic query: `UPDATE products SET stock = stock - ? WHERE id = ? AND stock >= ?`. If it updates 0 rows, there wasn't enough stock — didn't need to add explicit locking, and it still works fine wrapped in a transaction for multi-item orders.
+- All the valid order status moves are in `src/utils/orderStateMachine.js` and get checked before any status change, so a bad transition just fails instead of quietly messing up the data.
+- Expiry is handled two ways — a `node-cron` job every `EXPIRY_SWEEP_SECONDS`, and also a check whenever an order gets read or paid. That way even if a request comes in right between sweeps, it still sees the correct status.
