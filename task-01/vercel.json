@@ -6,8 +6,8 @@
     { "src": "frontend/package.json", "use": "@vercel/static-build", "config": { "distDir": "dist" } }
   ],
   "routes": [
-    { "src": "/products/(.*)", "dest": "backend/api/index.js" },
-    { "src": "/orders/(.*)", "dest": "backend/api/index.js" },
+    { "src": "/products(/.*)?", "dest": "backend/api/index.js" },
+    { "src": "/orders(/.*)?", "dest": "backend/api/index.js" },
     { "src": "/health", "dest": "backend/api/index.js" },
     { "src": "/cron/(.*)", "dest": "backend/api/index.js" },
     { "src": "/(.*)", "dest": "/frontend/$1" }
