@@ -1,8 +1,8 @@
 # Techloom.ai — Software Engineer Intern Assessment
 
-**Repository:** (add your GitHub URL here)
-**Task 01 live deployment:** (add your Render/Railway/Fly.io URL here)
-**Task 02 live deployment:** (add your Render/Railway/Fly.io URL here)
+**Repository:** https://github.com/ArkamThawfeek/techloom-intern-assessment
+**Task 01 live deployment:** https://task-01-orpin.vercel.app
+**Task 02 live deployment:** https://task-02-lyart.vercel.app
 
 Both tasks are self-contained Node.js/Express + MySQL projects, each with its own React frontend served by its own backend. Both default to **port 4000** — since they're deployed as two separate services, that's not a conflict in production; if you want to run both locally at the same time, override `PORT` for one of them via its `.env`. See each folder's README for full setup and testing instructions.
 
