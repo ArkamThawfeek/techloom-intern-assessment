@@ -1,6 +1,5 @@
 # Task 01 — POS Order & Inventory System
 
-**Repo:** https://github.com/ArkamThawfeek/techloom-intern-assessment
 **Live deployment:** https://task-01-orpin.vercel.app
 
 ## Stack
