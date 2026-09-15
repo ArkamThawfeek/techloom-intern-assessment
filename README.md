@@ -25,11 +25,9 @@ A storefront built on the same reservation/payment/lifecycle logic as Task 01, p
 - **Order lifecycle:** a single transition map (`RESERVED → PAID/FAILED/EXPIRED/CANCELLED`, `PAID → CANCELLED`) is checked before every status change, so invalid transitions are rejected with `409` instead of corrupting state.
 - **Reservation expiry:** enforced via a `node-cron` background sweep plus a lazy check-on-read, so a stale `RESERVED` order self-heals to `EXPIRED` the moment anything reads it. Both frontends disable Pay/Process once the on-screen countdown hits zero.
 - **Back navigation:** leaving checkout partway through releases the reservation and restores the cart server-side, instead of leaving stock locked under an abandoned order.
-- **Product codes:** each product's existing unique id is formatted into a display code (`P0001`, `P0002`, ...) — no schema change needed.
-- **Currency:** all prices in Rupees (`Rs.`).
 - **Product images (Task 02):** stored as binary data (`LONGBLOB`) in the database, served through a dedicated route.
 - **Payment outcomes:** Timeout is never a manual toggle — it's a function of the real reservation clock. `FAILURE` and `TIMEOUT` remain testable via the API with an explicit `mode`.
 
 ## Testing tips
 
-Each schema seeds a low-stock item (Task 01: "Limited Edition Mug", Task 02: "Desk Lamp") for exercising the no-overselling/concurrency behavior — see each README for a ready-to-run `curl` loop.
+Each schema seeds a low-stock item for exercising the no-overselling/concurrency behavior — see each README for a ready-to-run `curl` loop.
